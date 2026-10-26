@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>الدفاع عن القلعة</title>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #1a1a2e; touch-action: none; font-family: Arial, sans-serif; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 10px; left: 10px; right: 10px; color: white; font-size: 20px; font-weight: bold; pointer-events: none; display: flex; justify-content: space-between; }
+        #gameOver { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); color: white; padding: 20px 40px; border-radius: 15px; text-align: center; display: none; border: 2px solid #e94560; }
+        #gameOver h1 { margin: 0 0 10px 0; font-size: 28px; }
+        #gameOver p { margin: 0; font-size: 16px; }
+        #restartBtn { margin-top: 15px; padding: 10px 20px; font-size: 16px; background: #e94560; color: white; border: none; border-radius: 8px; cursor: pointer; pointer-events: auto; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div>❤️ القلعة: <span id="hp">100</span></div>
+        <div>💀 النقاط: <span id="score">0</span></div>
+    </div>
+    <div id="gameOver">
+        <h1>انتهت اللعبة!</h1>
+        <p>الوحوش دخلو للقلعة 😢</p>
+        <button id="restartBtn" onclick="restartGame()">العب مرة أخرى</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const hpEl = document.getElementById('hp');
+        const scoreEl = document.getElementById('score');
+        const gameOverEl = document.getElementById('gameOver');
+
+        let width, height;
+        let castle = { x: 0, y: 0, w: 80, h: 80, hp: 100 };
+        let enemies = [];
+        let bullets = [];
+        let score = 0;
+        let isGameOver = false;
+        let spawnInterval;
+        let gameLoopInterval;
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            castle.x = width / 2 - castle.w / 2;
+            castle.y = height - castle.h - 10;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        canvas.addEventListener('touchstart', handleShoot);
+        canvas.addEventListener('mousedown', handleShoot);
+
+        function handleShoot(e) {
+            if (isGameOver) return;
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            let touchX = clientX - rect.left;
+            let touchY = clientY - rect.top;
+            let castleCenterX = castle.x + castle.w / 2;
+            let castleCenterY = castle.y;
+            let angle = Math.atan2(touchY - castleCenterY, touchX - castleCenterX);
+            bullets.push({
+                x: castleCenterX, y: castleCenterY,
+                vx: Math.cos(angle) * 15, vy: Math.sin(angle) * 15,
+                radius: 5
+            });
+        }
+
+        function spawnEnemy() {
+            if (isGameOver) return;
+            let size = 40 + Math.random() * 20;
+            let x = Math.random() * (width - size);
+            enemies.push({ x: x, y: -size, w: size, h: size, speed: 1 + Math.random() * 2, hp: 1 });
+        }
+
+        function update() {
+            if (isGameOver) return;
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.x += b.vx; b.y += b.vy;
+                if (b.x < 0 || b.x > width || b.y < 0 || b.y > height) {
+                    bullets.splice(i, 1); continue;
+                }
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    let en = enemies[j];
+                    if (b.x > en.x && b.x < en.x + en.w && b.y > en.y && b.y < en.y + en.h) {
+                        enemies.splice(j, 1); bullets.splice(i, 1);
+                        score += 10; scoreEl.innerText = score;
+                        break;
+                    }
+                }
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let en = enemies[i];
+                en.y += en.speed;
+                if (en.y + en.h > castle.y && en.x + en.w > castle.x && en.x < castle.x + castle.w) {
+                    enemies.splice(i, 1);
+                    castle.hp -= 10; hpEl.innerText = castle.hp;
+                    if (castle.hp <= 0) gameOver();
+                }
+            }
+            draw();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, width, height);
+            ctx.font = castle.h + 'px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+            ctx.fillText('🏰', castle.x + castle.w / 2, castle.y + castle.h);
+            ctx.font = '40px Arial';
+            enemies.forEach(en => { ctx.fillText('👾', en.x + en.w / 2, en.y + en.h); });
+            ctx.fillStyle = '#00ffcc';
+            bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2); ctx.fill(); });
+        }
+
+        function startGame() {
+            castle.hp = 100; score = 0; enemies = []; bullets = []; isGameOver = false;
+            hpEl.innerText = castle.hp; scoreEl.innerText = score; gameOverEl.style.display = 'none';
+            clearInterval(spawnInterval); clearInterval(gameLoopInterval);
+            spawnInterval = setInterval(spawnEnemy, 1000);
+            gameLoopInterval = setInterval(update, 1000 / 60);
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            clearInterval(spawnInterval); clearInterval(gameLoopInterval);
+            gameOverEl.style.display = 'block';
+        }
+
+        function restartGame() { startGame(); }
+        startGame();
+    </script>
+</body>
+  </html>
