@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>الدفاع عن القلعة</title>
+    <title>الدفاع عن القلعة - صعب!</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #1a1a2e; touch-action: none; font-family: Arial, sans-serif; }
         canvas { display: block; }
         #ui { position: absolute; top: 10px; left: 10px; right: 10px; color: white; font-size: 20px; font-weight: bold; pointer-events: none; display: flex; justify-content: space-between; }
-        #gameOver { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); color: white; padding: 20px 40px; border-radius: 15px; text-align: center; display: none; border: 2px solid #e94560; }
-        #gameOver h1 { margin: 0 0 10px 0; font-size: 28px; }
-        #gameOver p { margin: 0; font-size: 16px; }
-        #restartBtn { margin-top: 15px; padding: 10px 20px; font-size: 16px; background: #e94560; color: white; border: none; border-radius: 8px; cursor: pointer; pointer-events: auto; }
+        #gameOver { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.9); color: white; padding: 20px; border-radius: 15px; text-align: center; display: none; border: 2px solid #e94560; width: 80%; max-width: 300px; }
+        #gameOver h1 { margin: 0 0 10px 0; font-size: 24px; color: #e94560; }
+        #gameOver p { margin: 0 0 15px 0; font-size: 16px; }
+        button { padding: 12px 20px; font-size: 16px; border: none; border-radius: 8px; cursor: pointer; margin: 5px; width: 100%; font-weight: bold; }
+        #restartBtn { background: #555; color: white; }
+        #adBtn { background: #00c851; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        #adOverlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: black; color: white; display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; font-size: 24px; }
     </style>
 </head>
 <body>
@@ -19,18 +22,29 @@
         <div>❤️ القلعة: <span id="hp">100</span></div>
         <div>💀 النقاط: <span id="score">0</span></div>
     </div>
+
     <div id="gameOver">
         <h1>انتهت اللعبة!</h1>
         <p>الوحوش دخلو للقلعة 😢</p>
-        <button id="restartBtn" onclick="restartGame()">العب مرة أخرى</button>
+        <button id="adBtn" onclick="watchAd()">📺 مشاهدة إعلان للمتابعة</button>
+        <button id="restartBtn" onclick="restartGame()">إعادة اللعب من الصفر</button>
     </div>
+
+    <div id="adOverlay">
+        <div>جاري تحميل الإعلان... 📺</div>
+        <div id="adTimer" style="margin-top: 20px; font-size: 40px;">3</div>
+    </div>
+
     <canvas id="gameCanvas"></canvas>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const hpEl = document.getElementById('hp');
         const scoreEl = document.getElementById('score');
         const gameOverEl = document.getElementById('gameOver');
+        const adOverlay = document.getElementById('adOverlay');
+        const adTimerEl = document.getElementById('adTimer');
 
         let width, height;
         let castle = { x: 0, y: 0, w: 80, h: 80, hp: 100 };
@@ -40,6 +54,8 @@
         let isGameOver = false;
         let spawnInterval;
         let gameLoopInterval;
+        let currentSpawnRate = 900; // البداية أسرع
+        let currentSpeedMultiplier = 1;
 
         function resize() {
             width = canvas.width = window.innerWidth;
@@ -75,7 +91,19 @@
             if (isGameOver) return;
             let size = 40 + Math.random() * 20;
             let x = Math.random() * (width - size);
-            enemies.push({ x: x, y: -size, w: size, h: size, speed: 1 + Math.random() * 2, hp: 1 });
+            enemies.push({ 
+                x: x, y: -size, w: size, h: size, 
+                speed: (1.5 + Math.random() * 1.5) * currentSpeedMultiplier, 
+                hp: 1 
+            });
+            
+            // زيادة الصعوبة مع زيادة النقاط
+            if (score > 100 && score % 100 === 0) {
+                currentSpawnRate = Math.max(300, currentSpawnRate - 50);
+                currentSpeedMultiplier += 0.1;
+                clearInterval(spawnInterval);
+                spawnInterval = setInterval(spawnEnemy, currentSpawnRate);
+            }
         }
 
         function update() {
@@ -121,9 +149,12 @@
 
         function startGame() {
             castle.hp = 100; score = 0; enemies = []; bullets = []; isGameOver = false;
+            currentSpawnRate = 900; currentSpeedMultiplier = 1;
             hpEl.innerText = castle.hp; scoreEl.innerText = score; gameOverEl.style.display = 'none';
+            adOverlay.style.display = 'none';
+            
             clearInterval(spawnInterval); clearInterval(gameLoopInterval);
-            spawnInterval = setInterval(spawnEnemy, 1000);
+            spawnInterval = setInterval(spawnEnemy, currentSpawnRate);
             gameLoopInterval = setInterval(update, 1000 / 60);
         }
 
@@ -133,8 +164,38 @@
             gameOverEl.style.display = 'block';
         }
 
+        function watchAd() {
+            gameOverEl.style.display = 'none';
+            adOverlay.style.display = 'flex';
+            let timeLeft = 3;
+            adTimerEl.innerText = timeLeft;
+            
+            let adCountdown = setInterval(() => {
+                timeLeft--;
+                adTimerEl.innerText = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(adCountdown);
+                    adOverlay.style.display = 'none';
+                    resumeGame();
+                }
+            }, 1000);
+        }
+
+        function resumeGame() {
+            castle.hp = 100; // يرجع للصحة كاملة
+            hpEl.innerText = castle.hp;
+            isGameOver = false;
+            
+            // يمسح غير الوحوش اللي فالشاشة باش يبدا نقي
+            enemies = []; 
+            
+            spawnInterval = setInterval(spawnEnemy, currentSpawnRate);
+            gameLoopInterval = setInterval(update, 1000 / 60);
+        }
+
         function restartGame() { startGame(); }
+        
         startGame();
     </script>
 </body>
-  </html>
+</html>
